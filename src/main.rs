@@ -1,16 +1,19 @@
-// External crates
-use clap::Parser;
+// standard crates
+use std::process;
 
-// Internal crates
+// internal crates
 use rvc::args::*;
+
+// external crates
+use clap::Parser;
 
 fn main() {
     // Obtain arguments
     let args = Args::parse();
 
-    // Separate by command
-    match args.command {
-        Command::Push => println!("You attempted to push!"),
-        Command::Revert { .. } => println!("You attempted to revert!"),
+    // Run runtime and exit out if error is encountered
+    if let Err(e) = rvc::run(args.command) {
+        eprintln!("Application error: {}", e);
+        process::exit(1);
     }
 }

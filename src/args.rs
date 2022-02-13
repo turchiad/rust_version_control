@@ -10,6 +10,7 @@ pub struct Args {
 // Command enum for use by Args
 #[derive(Subcommand)]
 pub enum Command {
+    Init,
     Push,
     Revert { version: Option<i32> },
 }
