@@ -31,3 +31,15 @@ The program should intuitively understand that if it is within any part of the r
 * We want to make any commit
 
 The program must now additionally know what the latest previous version was and how to uptick that for this new version
+
+### Programming Approach
+
+#### Packages
+
+* `thiserror` for error handling
+* `clap` for CLI args parsing
+
+### Possible Arguments
+
+* `rvc push`
+* `rvc revert <number since last push>`
