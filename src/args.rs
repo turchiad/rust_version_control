@@ -12,5 +12,5 @@ pub struct Args {
 pub enum Command {
     Init,
     Push,
-    Revert { version: Option<i32> },
+    Revert { version: String },
 }
