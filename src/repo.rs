@@ -1,5 +1,6 @@
 // standard crates
 use std::env;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -8,84 +9,110 @@ use crate::ProjectError;
 use crate::ProjectError::*;
 
 const REPO_ROOT: &str = ".rvc";
+const CONFIG_NAME: &str = "config";
+
+// Functions for non-primitive constants
+
+/// constructing non-primitive constant REPO_ROOT
+fn const_repo_root() -> PathBuf {
+    PathBuf::from(REPO_ROOT)
+}
+
+/// constructing non_primitive constant CONFIG_NAME
+fn const_config_name() -> PathBuf {
+    PathBuf::from(CONFIG_NAME)
+}
 
 /// struct for maintaining info about the repository
 pub struct Repo {
-    location: PathBuf,
+    /// stores the path of the root of the repository, which should be `working_directory_root_path/REPO_ROOT`
+    path_root_repo_dir: PathBuf,
+    /// stores the path of the root of the working directory, which should be `../repo_root_path`
+    path_root_working_dir: PathBuf,
+    /// stores the path of the config file, which should be `repo_root_path/config`
+    path_config: PathBuf,
+    /// stores the latest version number (if any) of the repo
     latest_version: Option<String>,
 }
 
 impl Repo {
-    /// constructor for making a new repo struct
-    /// this constructor will additionally setup a repo struct at the location if
-    /// one is not already made
-    pub fn setup(dir: Option<&Path>) -> Result<Repo, ProjectError> {
-        // First, acquire dir as a PathBuf
-        let dir = match dir {
-            Some(path) => PathBuf::from(path), // If we are given a path, use that
-            None => match env::current_dir() {
-                // otherwise, use the current directory
-                Ok(path_buf) => path_buf,
-                Err(_) => return Err(UnexpectedCurrentDirectoryNotFoundError),
-            },
-        };
-        // Next, check if the repo location suggested is valid and in use
-        match Repo::validate_location(dir)? {  // Return error if path provided was invalid
-            // if true, the repo is already in use, just initialize normally
-            true => return Repo::new_from_location(dir),
-            false =>  
-        }
-    }
-
-    // /// constructor for making a new repo struct
-    // pub fn new() -> Result<Repo, ProjectError> {
-    //     match Repo::find_location()? {
-    //         Some(location) => Repo::new_from_location(&location),
-    //         None => Err(RepoNotFoundError),
-    //     }
-    // }
-
-    // /// constructor for making a new repo struct given a provided location
-    // /// this method will check that the location is valid first before returning
-    // pub fn try_new_from_location(location: &str) -> Result<Repo, ProjectError> {
-    //     match Repo::validate_location(location)? {
-    //         true => Repo::new_from_location(location),
-    //         false => Err(RepoInvalidLocationError(String::from(location))),
-    //     }
-    // }
-
-    // /// constructor for making a new repo given a provided location
-    // /// this method will NOT check that the location is valid first before returning
-    // pub fn new_from_location(dir: Path) -> Result<Repo, ProjectError> {
-    //     Ok(Repo {
-    //         location: PathBuf::from(dir),
-    //         latest_version: None,
-    //     })
-    // }
-
-    pub fn find_location() -> Result<Option<String>, ProjectError> {
+    /// flexible constructor for the Repo struct
+    /// this method will attempt to find an existing valid repository
+    /// and will return a Repo struct configured to that
+    /// repository if found, otherwise
+    /// this method will attempt to create a new repository
+    /// in the current directory and will return a Repo struct configured to that
+    /// repoository if successful
+    pub fn try_new() -> Result<Repo, ProjectError> {
         Err(UnimplementedError)
     }
 
-    /// This method checks if `dir` fits the repo nomenclature
-    /// and also checks if `dir` is a valid directory
-    ///
-    /// # Returns
-    ///     `Ok(true)`    -> if `dir` matches `REPO_ROOT` and exists
-    ///     `Ok(false)`   -> if `dir` matches `REPO_ROOT` and does not exist
-    ///     `Err(x)`      -> if `dir` does not match `REPO_ROOT`
-    pub fn validate_location(dir: &Path) -> Result<bool, ProjectError> {
-        // First, check if `dir` fits repo nomenclature
-        match dir.ends_with(REPO_ROOT) {
-            true => (),
-            false => return Err(RepoInvalidFormatError(PathBuf::from(dir))),
-        }
-        // Next, check if `dir` is a valid directory
-        // the result of this will be the return value
-        Ok(dir.is_dir())
+    /// default constructor for Repo struct
+    /// this method will attempt to create a new repository
+    /// in the current directory and will return a Repo struct configured to that
+    /// repository if successful
+    pub fn new() -> Result<Repo, ProjectError> {
+        let path_root_working_dir =
+            env::current_dir().map_err(|_| UnexpectedCurrentDirectoryNotFoundError)?;
+
+        Repo::new_from_path(&path_root_working_dir)
     }
 
-    pub fn next_version() -> Result<String, ProjectError> {
+    /// default constructor for Repo struct
+    /// this method will attempt to create a new repository
+    /// in the given directory and will return a Repo struct configured to that
+    pub fn new_from_path(path_root_working_dir: &Path) -> Result<Repo, ProjectError> {
+        // First, initialize all expected instance variables
+        let path_root_working_dir = PathBuf::from(path_root_working_dir);
+        let path_root_repo_dir = path_root_working_dir.join(const_repo_root());
+        let path_config = path_root_repo_dir.join(const_config_name());
+        // Next, create `path_root_repo_dir` and `path_config`
+        match path_root_repo_dir.is_dir() {
+            // this method should not be called on an existing repo, so this is an error case
+            true => return Err(RepoRootAlreadyExistsError(path_root_repo_dir)),
+            // attempt to create the repo directory
+            false => match fs::create_dir(&path_root_repo_dir) {
+                Ok(_) => (),
+                Err(_) => return Err(CreateDirectoryError(path_root_repo_dir)),
+            },
+        }
+        // If we have reached this line, then path_config definitely does not exist, but it doesn't hurt to check
+        match path_config.is_file() {
+            // theoretically unreachable state
+            true => return Err(RepoConfigAlreadyExistsError(path_config)),
+            false => match fs::File::create(&path_config) {
+                Ok(_) => (),
+                Err(_) => return Err(CreateFileError(path_config)),
+            },
+        }
+        // Return constructed struct matching newly setup Repo
+        Ok(Repo {
+            path_root_repo_dir: path_root_repo_dir,
+            path_root_working_dir: path_root_working_dir,
+            path_config: path_config,
+            latest_version: None,
+        })
+    }
+
+    /// alternative constructor for Repo struct
+    /// this method will attempt to find an existing valid repository
+    /// and will return a Repo struct configured to that
+    /// repository if found
+    pub fn new_from_existing() -> Result<Repo, ProjectError> {
+        Err(UnimplementedError)
+    }
+
+    /// alternative constructor for Repo struct
+    /// this method will verify if the given path `dir` points to a valid
+    /// existing repository and will return a Repo struct configured to that
+    /// repository if found
+    pub fn new_from_existing_path() -> Result<Repo, ProjectError> {
+        Err(UnimplementedError)
+    }
+
+    /// this method will verify if the given path matches all of the necessary
+    /// information to be considered a valid repository
+    pub fn validate_path_is_repo() -> Result<bool, ProjectError> {
         Err(UnimplementedError)
     }
 }
