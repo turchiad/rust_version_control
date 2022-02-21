@@ -24,4 +24,6 @@ pub enum ProjectError {
     CreateDirectoryError(PathBuf),
     #[error("failed to create file: {0}")]
     CreateFileError(PathBuf),
+    #[error("failed to convert the following path to an absolute path: {0}")]
+    UnableToCanonicalizeError(PathBuf),
 }
