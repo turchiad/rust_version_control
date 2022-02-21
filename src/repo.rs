@@ -67,24 +67,7 @@ impl Repo {
         let path_root_repo_dir = path_root_working_dir.join(const_repo_root());
         let path_config = path_root_repo_dir.join(const_config_name());
         // Next, create `path_root_repo_dir` and `path_config`
-        match path_root_repo_dir.is_dir() {
-            // this method should not be called on an existing repo, so this is an error case
-            true => return Err(RepoRootAlreadyExistsError(path_root_repo_dir)),
-            // attempt to create the repo directory
-            false => match fs::create_dir(&path_root_repo_dir) {
-                Ok(_) => (),
-                Err(_) => return Err(CreateDirectoryError(path_root_repo_dir)),
-            },
-        }
-        // If we have reached this line, then path_config definitely does not exist, but it doesn't hurt to check
-        match path_config.is_file() {
-            // theoretically unreachable state
-            true => return Err(RepoConfigAlreadyExistsError(path_config)),
-            false => match fs::File::create(&path_config) {
-                Ok(_) => (),
-                Err(_) => return Err(CreateFileError(path_config)),
-            },
-        }
+        Repo::setup(&path_root_repo_dir, &path_config)?;
         // Return constructed struct matching newly setup Repo
         Ok(Repo {
             path_root_repo_dir: path_root_repo_dir,
@@ -108,6 +91,47 @@ impl Repo {
     /// repository if found
     pub fn new_from_existing_path() -> Result<Repo, ProjectError> {
         Err(UnimplementedError)
+    }
+
+    /// method to create a new repository directory and config file
+    /// without returning any corresponding Repo struct
+    fn setup(path_root_repo_dir: &Path, path_config: &Path) -> Result<(), ProjectError> {
+        // First setup `path_root_repo_dir`
+        Repo::setup_repo_dir(&path_root_repo_dir)?;
+        // Next setup `path_config`
+        Repo::setup_config(&path_config)?;
+        Ok(())
+    }
+
+    /// method to create a new repository directory
+    /// without returning any corresponding Repo struct
+    fn setup_repo_dir(path_root_repo_dir: &Path) -> Result<(), ProjectError> {
+        match path_root_repo_dir.is_dir() {
+            // this method should not be called on an existing repo, so this is an error case
+            true => Err(RepoRootAlreadyExistsError(PathBuf::from(
+                path_root_repo_dir,
+            ))),
+            // attempt to create the repo directory
+            false => match fs::create_dir(&path_root_repo_dir) {
+                Ok(_) => Ok(()),
+                Err(_) => Err(CreateDirectoryError(PathBuf::from(path_root_repo_dir))),
+            },
+        }
+    }
+
+    /// method to create a new config file
+    /// without returning any corresponding Repo struct
+    fn setup_config(path_config: &Path) -> Result<(), ProjectError> {
+        // If we have reached this line, then path_config shouldn't exist, but it doesn't hurt to check
+        match path_config.is_file() {
+            // this method should not be called on an existing repo, so this is an error case
+            true => Err(RepoConfigAlreadyExistsError(PathBuf::from(path_config))),
+            // attempt to create the config file
+            false => match fs::File::create(&path_config) {
+                Ok(_) => Ok(()),
+                Err(_) => Err(CreateFileError(PathBuf::from(path_config))),
+            },
+        }
     }
 
     /// this method will verify if the given path matches all of the necessary
