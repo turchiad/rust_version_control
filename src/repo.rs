@@ -10,7 +10,7 @@ use crate::ProjectError::*;
 
 const REPO_ROOT: &str = ".rvc";
 const CONFIG_NAME: &str = "config";
-const ABSOLUTE_ROOT: &str = "/"
+const ABSOLUTE_ROOT: &str = "/";
 
 // Functions for non-primitive constants
 
@@ -144,33 +144,68 @@ impl Repo {
     /// a repository that matches the repo nomenclature, will validate if this
     /// repo is a valid construction, and will return a Repo struct configured
     /// to that repository if found
-    pub fn find_repo(absolute_root: Option<&Path>) -> Result<PathBuf, ProjectError> {
+    pub fn find_repo(absolute_root: Option<&Path>) -> Result<Repo, ProjectError> {
         // First, get any defaults
         let absolute_root = match absolute_root {
-            Some(path_buf) => path_buf,
+            Some(path) => PathBuf::from(path),
             None => const_absolute_root(),
-        }
+        };
         // Next, get our current working directory in absolute terms
         let current_working_directory =
             env::current_dir().map_err(|_| UnexpectedCurrentDirectoryNotFoundError)?;
         let current_working_directory_absolute = current_working_directory
             .canonicalize()
-            .map_err(|_| UnableToCanonicalizeError(current_working_directory));
+            .map_err(|_| UnableToCanonicalizeError(current_working_directory))?;
         // We will use this to iterate upwards to search for the repo root
         let mut search_directory = PathBuf::from(current_working_directory_absolute);
-        // Iterate through directories
-        // while search_directory != absolute_root {
-        //     match search_directory.join(const_repo_root).is_dir() {
-        //         Ok(_) => 
-        //     }
-        // }
+        // We will store the existing repo's path here
+        let mut repo_root_existing = None;
 
-        Err(UnimplementedError)
+        // Iterate through directories
+        while search_directory != absolute_root {
+            // If search_directory/REPO_ROOT exists, we have found the existing repo
+            let repo_root_possible = search_directory.join(const_repo_root());
+            match repo_root_possible.is_dir() {
+                true => {
+                    repo_root_existing = Some(repo_root_possible);
+                    break;
+                }
+                false => {
+                    search_directory.pop();
+                    () // To match the type of all arms
+                }
+            }
+        }
+        // unwrap the Option<PathBuf>
+        let repo_root_existing = match repo_root_existing {
+            Some(path_buf) => path_buf,
+            None => return Err(RepoNotFoundError),
+        };
+
+        // validate the path found has all of the characteristics of a repo
+        match Repo::validate_path_is_repo(&repo_root_existing)? {
+            true => (),
+            false => return Err(RepoInvalidFormatError(repo_root_existing)),
+        }
+
+        // Initialize all expected instance variables
+        let path_root_working_dir = PathBuf::from(repo_root_existing);
+        let path_root_repo_dir = path_root_working_dir.join(const_repo_root());
+        let path_config = path_root_repo_dir.join(const_config_name());
+
+        /* We should read the config here to determine the latest version number */
+        // Return constructed struct matching existing Repo
+        Ok(Repo {
+            path_root_repo_dir: path_root_repo_dir,
+            path_root_working_dir: path_root_working_dir,
+            path_config: path_config,
+            latest_version: None,
+        })
     }
 
     /// this method will verify if the given path matches all of the necessary
     /// information to be considered a valid repository
-    pub fn validate_path_is_repo() -> Result<bool, ProjectError> {
+    pub fn validate_path_is_repo(path_root_repo_dir: &Path) -> Result<bool, ProjectError> {
         Err(UnimplementedError)
     }
 }
